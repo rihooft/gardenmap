@@ -4,4 +4,4 @@ set -e
 export GARDENMAP_DATA="${GARDENMAP_DATA:-/data}"
 export GARDENMAP_STATIC="/app/static"
 cd /app
-exec python -m uvicorn backend.main:app --host 0.0.0.0 --port 8099 --proxy-headers --forwarded-allow-ips='*'
+exec python -m uvicorn backend.main:app --host 0.0.0.0 --port 8099 --no-proxy-headers
