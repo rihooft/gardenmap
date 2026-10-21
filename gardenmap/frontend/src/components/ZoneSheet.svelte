@@ -4,9 +4,9 @@
 
   /**
    * zone : { id?, kind, name, notes } ; geom : 'polygon' | 'line' ; measure : { area_m2 | length_m }
-   * shapeEditing : sommets en cours de modification
+   * compact : bandeau réduit pendant qu'on fait glisser les sommets ; ondetails : bascule bandeau / panneau complet
    */
-  let { zone, geom, measure, shapeEditing = false, onsave, oncancel, ondelete, onshape, values = $bindable() } = $props();
+  let { zone, geom, measure, compact = false, onsave, oncancel, ondelete, ondetails, values = $bindable() } = $props();
 
   let kind = $state(zone.kind || (geom === 'line' ? 'mur' : null));
   let name = $state(zone.name || '');
@@ -21,16 +21,18 @@
   });
 </script>
 
-<div class="sheet" class:compact={shapeEditing} role="dialog" aria-label="Zone">
-  {#if shapeEditing}
+<div class="sheet" class:compact role="dialog" aria-label="Zone">
+  {#if compact}
     <div class="row">
-      <span class="grow small-text">Glissez les sommets ; touchez le milieu d'un côté pour en ajouter un ; appui long sur un sommet pour le retirer.</span>
+      <strong class="grow">{name || app.meta.zone_kinds.find((k) => k.key === kind)?.label}</strong>
       {#if measure}<span class="pill">{fmtMeasure(measure)}</span>{/if}
     </div>
+    <p class="muted small-text">Glissez les sommets ; touchez le milieu d'un côté pour en ajouter un ; appui long sur un sommet pour le retirer.</p>
     <div class="row">
       <button class="primary grow" onclick={() => onsave({ kind, name: name.trim() || null, notes: notes.trim() || null })}>Enregistrer</button>
-      <button class="small" onclick={() => onshape()}>Fin de la forme</button>
-      <button class="ghost small" onclick={() => oncancel()}>Annuler la modification</button>
+      <button class="small" onclick={() => ondetails()}>Type, nom…</button>
+      {#if ondelete}<button class="small danger" aria-label="Supprimer la zone" onclick={() => ondelete()}>🗑</button>{/if}
+      <button class="ghost small" onclick={() => oncancel()}>Annuler</button>
     </div>
   {:else}
     <div class="row">
@@ -57,7 +59,7 @@
       <button class="primary grow" disabled={!kind} onclick={() => onsave({ kind, name: name.trim() || null, notes: notes.trim() || null })}>
         {isNew ? 'Ajouter' : 'Enregistrer'}
       </button>
-      {#if !isNew && onshape}<button class="small" onclick={() => onshape()}>✏️ Forme</button>{/if}
+      {#if !isNew && ondetails}<button class="small" onclick={() => ondetails()}>▾ Réduire</button>{/if}
       {#if !isNew && ondelete}<button class="small danger" aria-label="Supprimer la zone" onclick={() => ondelete()}>🗑</button>{/if}
       <button class="ghost small" onclick={() => oncancel()}>Annuler</button>
     </div>

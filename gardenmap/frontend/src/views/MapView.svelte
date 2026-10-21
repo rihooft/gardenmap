@@ -1,5 +1,5 @@
 <script>
-  import { onMount, onDestroy, untrack } from 'svelte';
+  import { onMount, onDestroy, untrack, tick } from 'svelte';
   import { app, route, go, mapView, refreshSpecimens, refreshZones, guard, toast } from '../lib/store.svelte.js';
   import {
     L, BASES, CADASTRE, FRANCE, MAX_ZOOM, createGeoMap, tileLayer, probeNative, loadPrefs, savePrefs,
@@ -42,6 +42,7 @@
   let pending = $state(null); // { zone, geom, layer, isNew, measure }
   let shapeEditing = $state(false);
   let shapeChanged = false; // forme modifiée depuis la sélection
+  let zoneDetails = $state(false); // panneau complet (type, nom, notes) pendant l'édition d'une zone
   let pendingValues = $state(null); // type, nom, notes en cours de saisie dans le panneau
   let zoneLayers = new Map();
 
@@ -135,7 +136,7 @@
         if (z.name && prefs.labels && kind.geom === 'polygon') {
           layer.bindTooltip(escapeHtml(z.name), { permanent: true, direction: 'center', className: 'gm-zlabel', interactive: false });
         }
-        if (zonesMode) layer.on('click', (e) => { if (drawing || shapeEditing) return; L.DomEvent.stop(e); selectZone(z, layer); });
+        if (zonesMode) layer.on('click', (e) => { if (drawing) return; L.DomEvent.stop(e); selectZone(z); });
         zoneLayers.set(z.id, { layer, kind });
         gj.addTo(zonesGroup);
       }
@@ -372,23 +373,31 @@
       if (drawing.vertices && !confirm('Le tracé en cours sera abandonné. Continuer ?')) return;
       cancelDrawing();
     }
-    if (pending) {
-      const v = pendingValues;
-      const z = pending.zone;
-      const dirty = pending.isNew || shapeChanged || (v && (v.kind !== z.kind || (v.name || null) !== (z.name || null) || (v.notes || null) !== (z.notes || null)));
-      if (dirty) {
-        if (pending.isNew && !v?.kind) {
-          if (!confirm("La nouvelle zone n'a pas de type et ne sera pas enregistrée. L'abandonner ?")) return;
-          discardPending();
-        } else if (!(await savePending(v))) {
-          return; // erreur affichée : on reste en mode aplats
-        }
-      } else {
-        discardPending();
-      }
-    }
+    if (!(await closePending())) return;
     zonesMode = false;
     if (route.query.zones) go('/');
+  }
+
+  function pendingDirty() {
+    if (!pending) return false;
+    const v = pendingValues;
+    const z = pending.zone;
+    return pending.isNew || shapeChanged || !!(v && (v.kind !== z.kind || (v.name || null) !== (z.name || null) || (v.notes || null) !== (z.notes || null)));
+  }
+
+  /** Ferme la zone en cours : l'enregistre si elle a changé. Renvoie false s'il faut rester dessus. */
+  async function closePending() {
+    if (!pending) return true;
+    if (!pendingDirty()) {
+      discardPending();
+      return true;
+    }
+    if (pending.isNew && !pendingValues?.kind) {
+      if (!confirm("La nouvelle zone n'a pas de type et ne sera pas enregistrée. L'abandonner ?")) return false;
+      discardPending();
+      return true;
+    }
+    return await savePending(pendingValues); // en cas d'erreur (affichée), on reste sur la zone
   }
 
   // Accrochage aux sommets et bords des zones voisines (rayon fixe de 18 px à l'écran) :
@@ -442,28 +451,26 @@
     pending = { zone: {}, geom, layer, isNew: true, measure: measureGeometry(geometry) };
   }
 
-  function selectZone(z, layer) {
-    if (drawing) return;
-    discardPending();
+  // Toucher une zone la sélectionne et affiche directement ses sommets.
+  async function selectZone(z) {
+    if (drawing || pending?.zone.id === z.id) return;
+    if (!(await closePending())) return;
+    await tick(); // laisse redessiner les zones si la précédente vient d'être enregistrée
+    const layer = zoneLayers.get(z.id)?.layer; // toujours la couche affichée, jamais une ancienne
+    if (!layer) return;
     const kind = kindOf(app.meta, z.kind);
     pending = { zone: z, geom: kind.geom, layer, isNew: false, measure: z.area_m2 != null ? { area_m2: z.area_m2 } : { length_m: z.length_m } };
     shapeChanged = false;
+    zoneDetails = false;
     layer.setStyle({ color: '#c0392b', weight: 3, opacity: 1 });
-    layer.bringToFront();
-  }
-
-  function toggleShape() {
-    if (!pending) return;
-    if (shapeEditing) {
-      pending.layer.pm.disable();
-      shapeEditing = false;
-      pending.measure = measureGeometry(pending.layer.toGeoJSON().geometry);
-      return;
-    }
-    pending.layer.pm.enable(shapeOptions());
-    pending.layer.on('pm:edit', () => {
+    layer.bringToFront(); // contour visible au-dessus des zones voisines…
+    // …mais sa surface laisse passer les touchers vers les zones qu'elle recouvre (piscine dans la pelouse)
+    const el = layer.getElement?.();
+    if (el) el.style.pointerEvents = 'none';
+    layer.pm.enable(shapeOptions());
+    layer.on('pm:edit', () => {
       shapeChanged = true;
-      pending.measure = measureGeometry(pending.layer.toGeoJSON().geometry);
+      if (pending?.layer === layer) pending.measure = measureGeometry(layer.toGeoJSON().geometry);
     });
     shapeEditing = true;
   }
@@ -475,6 +482,7 @@
     pending = null;
     shapeEditing = false;
     shapeChanged = false;
+    zoneDetails = false;
     drawZones(); // rétablit le style et la forme d'origine
   }
 
@@ -508,7 +516,7 @@
   let minVertices = $derived(drawing?.geom === 'line' ? 2 : 3);
 </script>
 
-<div class="wrap" class:zones-mode={zonesMode} class:drawing={!!drawing || shapeEditing}>
+<div class="wrap" class:zones-mode={zonesMode} class:drawing={!!drawing}>
   <div class="map" bind:this={el}></div>
 
   {#if zonesMode}
@@ -599,8 +607,9 @@
     </div>
   {:else if pending}
     {#key pending.zone.id ?? 'new'}
-      <ZoneSheet zone={pending.zone} geom={pending.geom} measure={pending.measure} {shapeEditing} bind:values={pendingValues}
-        onsave={savePending} oncancel={discardPending} ondelete={pending.isNew ? null : deletePending} onshape={pending.isNew ? null : toggleShape} />
+      <ZoneSheet zone={pending.zone} geom={pending.geom} measure={pending.measure} compact={shapeEditing && !zoneDetails} bind:values={pendingValues}
+        onsave={savePending} oncancel={discardPending} ondelete={pending.isNew ? null : deletePending}
+        ondetails={pending.isNew ? null : () => (zoneDetails = !zoneDetails)} />
     {/key}
   {/if}
 

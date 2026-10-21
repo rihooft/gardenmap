@@ -19,7 +19,7 @@ Variante : pousser ce dossier dans un dépôt GitHub et l'ajouter comme dépôt 
 
 1. Au premier lancement, **Où est votre jardin ?** : tapez l'adresse (géocodeur IGN) ou touchez
    « Je suis dans le jardin », cadrez la carte puis **Enregistrer cette vue**.
-2. **✏️ Dessiner les aplats** : tracez les grandes surfaces (pelouse, massifs, terrasse, bâtiments,
+2. **✏️ Dessiner les aplats** : touchez une zone pour afficher et déplacer ses sommets ; tracez les grandes surfaces (pelouse, massifs, terrasse, bâtiments,
    piscine, potager…) et les lignes (murs, clôtures) sur la photo aérienne. Les points s'accrochent aux
    sommets voisins (rayon fixe de 18 px à l'écran : zoomez pour placer un point librement près d'une
    zone, ou touchez **🧲 Accrochage** pour passer en placement libre). Dessinez d'abord les grandes
