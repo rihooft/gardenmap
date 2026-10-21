@@ -211,6 +211,7 @@
     map.on('move', onMove);
     map.on('click', () => { if (!zonesMode) selected = null; });
     map.on('pm:create', onZoneDrawn);
+    map.pm.setGlobalOptions({ snappable: prefs.snap });
     map.on('pm:drawstart', ({ workingLayer }) => {
       workingLayer.on('pm:vertexadded pm:vertexremoved', () => {
         if (drawing) drawing.vertices = workingLayer.getLatLngs().length;
@@ -390,10 +391,28 @@
     if (route.query.zones) go('/');
   }
 
+  // Accrochage aux sommets et bords des zones voisines (rayon fixe de 18 px à l'écran) :
+  // modifiable à tout moment, y compris pendant un tracé ou une modification de forme.
+  function toggleSnap() {
+    prefs.snap = !prefs.snap;
+    savePrefs($state.snapshot(prefs));
+    map.pm.setGlobalOptions({ snappable: prefs.snap });
+    // les poignées d'une forme en cours de modification gardent leur réglage : on relance l'édition
+    if (shapeEditing && pending?.layer.pm.enabled()) {
+      pending.layer.pm.disable();
+      pending.layer.pm.enable(shapeOptions());
+    }
+    toast(prefs.snap ? 'Accrochage activé' : 'Accrochage désactivé : placement libre');
+  }
+
+  function shapeOptions() {
+    return { snappable: prefs.snap, snapDistance: 18, allowSelfIntersection: false, removeVertexOn: 'click' };
+  }
+
   function startDrawing(geom) {
     discardPending();
     drawing = { geom, vertices: 0 };
-    map.pm.enableDraw(geom === 'line' ? 'Line' : 'Polygon', { snappable: true, snapDistance: 18, finishOn: null, continueDrawing: false });
+    map.pm.enableDraw(geom === 'line' ? 'Line' : 'Polygon', { snappable: prefs.snap, snapDistance: 18, finishOn: null, continueDrawing: false });
   }
 
   function drawHandler() {
@@ -441,7 +460,7 @@
       pending.measure = measureGeometry(pending.layer.toGeoJSON().geometry);
       return;
     }
-    pending.layer.pm.enable({ snappable: true, snapDistance: 18, allowSelfIntersection: false, removeVertexOn: 'click' });
+    pending.layer.pm.enable(shapeOptions());
     pending.layer.on('pm:edit', () => {
       shapeChanged = true;
       pending.measure = measureGeometry(pending.layer.toGeoJSON().geometry);
@@ -495,6 +514,7 @@
   {#if zonesMode}
     <div class="topbar">
       <strong class="grow">Aplats du jardin</strong>
+      <button class="small snap" class:on={prefs.snap} aria-pressed={prefs.snap} title="Accrocher les points aux zones voisines" onclick={toggleSnap}>🧲 {prefs.snap ? 'Accrochage' : 'Libre'}</button>
       {#if !drawing && !pending}
         <button class="small" onclick={() => startDrawing('polygon')}>＋ Surface</button>
         <button class="small" onclick={() => startDrawing('line')}>＋ Ligne</button>
@@ -644,6 +664,7 @@
     position: absolute; top: 10px; left: 10px; right: 64px; z-index: 950; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
     background: var(--surface); border-radius: 14px; padding: 8px 8px 8px 14px; box-shadow: var(--shadow);
   }
+  .snap.on { background: var(--leaf-soft); border-color: var(--forest); }
   .hint {
     position: absolute; left: 12px; right: 12px; bottom: 16px; z-index: 900; max-width: 520px; margin: 0 auto;
     background: color-mix(in srgb, var(--surface) 92%, transparent); border-radius: 12px; padding: 10px 14px; font-size: 0.9rem; box-shadow: var(--shadow);

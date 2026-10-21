@@ -60,7 +60,7 @@ export const PRESETS = {
   mixte: { base: 'ortho', photoOpacity: 1, zones: true, zonesOpacity: 0.55 },
   plan: { base: 'ortho', photoOpacity: 0.3, zones: true, zonesOpacity: 0.95 },
 };
-const DEFAULT_PREFS = { ...PRESETS.mixte, cadastre: false, labels: true, autoFade: true, preset: 'mixte' };
+const DEFAULT_PREFS = { ...PRESETS.mixte, cadastre: false, labels: true, autoFade: true, snap: true, preset: 'mixte' };
 
 export function loadPrefs() {
   try {

@@ -21,7 +21,9 @@ Variante : pousser ce dossier dans un dépôt GitHub et l'ajouter comme dépôt 
    « Je suis dans le jardin », cadrez la carte puis **Enregistrer cette vue**.
 2. **✏️ Dessiner les aplats** : tracez les grandes surfaces (pelouse, massifs, terrasse, bâtiments,
    piscine, potager…) et les lignes (murs, clôtures) sur la photo aérienne. Les points s'accrochent aux
-   sommets voisins. Dessinez d'abord les grandes zones, les petites se placent par-dessus.
+   sommets voisins (rayon fixe de 18 px à l'écran : zoomez pour placer un point librement près d'une
+   zone, ou touchez **🧲 Accrochage** pour passer en placement libre). Dessinez d'abord les grandes
+   zones, les petites se placent par-dessus.
 3. **＋ Plante ici** au pied d'une plante : mesure GPS moyennée, puis ajustement sous la cible.
    La fiche indique automatiquement la zone où se trouve la plante.
 
