@@ -41,6 +41,8 @@
   let drawing = $state(null); // { geom: 'polygon'|'line', vertices }
   let pending = $state(null); // { zone, geom, layer, isNew, measure }
   let shapeEditing = $state(false);
+  let shapeChanged = false; // forme modifiée depuis la sélection
+  let pendingValues = $state(null); // type, nom, notes en cours de saisie dans le panneau
   let zoneLayers = new Map();
 
   let categories = $derived([...new Set(app.specimens.map((s) => s.category).filter(Boolean))]);
@@ -363,9 +365,27 @@
     if (map.getZoom() < 18.5) map.setZoom(19);
   }
 
-  function exitZones() {
-    cancelDrawing();
-    discardPending();
+  // « Terminé » enregistre la zone en cours au lieu de jeter les modifications.
+  async function exitZones() {
+    if (drawing) {
+      if (drawing.vertices && !confirm('Le tracé en cours sera abandonné. Continuer ?')) return;
+      cancelDrawing();
+    }
+    if (pending) {
+      const v = pendingValues;
+      const z = pending.zone;
+      const dirty = pending.isNew || shapeChanged || (v && (v.kind !== z.kind || (v.name || null) !== (z.name || null) || (v.notes || null) !== (z.notes || null)));
+      if (dirty) {
+        if (pending.isNew && !v?.kind) {
+          if (!confirm("La nouvelle zone n'a pas de type et ne sera pas enregistrée. L'abandonner ?")) return;
+          discardPending();
+        } else if (!(await savePending(v))) {
+          return; // erreur affichée : on reste en mode aplats
+        }
+      } else {
+        discardPending();
+      }
+    }
     zonesMode = false;
     if (route.query.zones) go('/');
   }
@@ -408,6 +428,7 @@
     discardPending();
     const kind = kindOf(app.meta, z.kind);
     pending = { zone: z, geom: kind.geom, layer, isNew: false, measure: z.area_m2 != null ? { area_m2: z.area_m2 } : { length_m: z.length_m } };
+    shapeChanged = false;
     layer.setStyle({ color: '#c0392b', weight: 3, opacity: 1 });
     layer.bringToFront();
   }
@@ -421,7 +442,10 @@
       return;
     }
     pending.layer.pm.enable({ snappable: true, snapDistance: 18, allowSelfIntersection: false, removeVertexOn: 'click' });
-    pending.layer.on('pm:edit', () => (pending.measure = measureGeometry(pending.layer.toGeoJSON().geometry)));
+    pending.layer.on('pm:edit', () => {
+      shapeChanged = true;
+      pending.measure = measureGeometry(pending.layer.toGeoJSON().geometry);
+    });
     shapeEditing = true;
   }
 
@@ -431,6 +455,7 @@
     if (pending.isNew) pending.layer.remove();
     pending = null;
     shapeEditing = false;
+    shapeChanged = false;
     drawZones(); // rétablit le style et la forme d'origine
   }
 
@@ -441,11 +466,13 @@
     const r = p.isNew
       ? await guard(() => api.post('zones', { ...values, geometry }), 'Zone ajoutée')
       : await guard(() => api.put(`zones/${p.zone.id}`, { ...values, geometry }), 'Zone enregistrée');
-    if (!r) return;
+    if (!r) return false;
     if (p.isNew) p.layer.remove();
     pending = null;
     shapeEditing = false;
+    shapeChanged = false;
     await refreshZones();
+    return true;
   }
 
   async function deletePending() {
@@ -552,7 +579,7 @@
     </div>
   {:else if pending}
     {#key pending.zone.id ?? 'new'}
-      <ZoneSheet zone={pending.zone} geom={pending.geom} measure={pending.measure} {shapeEditing}
+      <ZoneSheet zone={pending.zone} geom={pending.geom} measure={pending.measure} {shapeEditing} bind:values={pendingValues}
         onsave={savePending} oncancel={discardPending} ondelete={pending.isNew ? null : deletePending} onshape={pending.isNew ? null : toggleShape} />
     {/key}
   {/if}

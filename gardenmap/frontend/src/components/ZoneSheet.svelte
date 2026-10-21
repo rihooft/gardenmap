@@ -6,7 +6,7 @@
    * zone : { id?, kind, name, notes } ; geom : 'polygon' | 'line' ; measure : { area_m2 | length_m }
    * shapeEditing : sommets en cours de modification
    */
-  let { zone, geom, measure, shapeEditing = false, onsave, oncancel, ondelete, onshape } = $props();
+  let { zone, geom, measure, shapeEditing = false, onsave, oncancel, ondelete, onshape, values = $bindable() } = $props();
 
   let kind = $state(zone.kind || (geom === 'line' ? 'mur' : null));
   let name = $state(zone.name || '');
@@ -14,6 +14,11 @@
   let kinds = $derived(app.meta.zone_kinds.filter((k) => k.geom === geom));
   let isNew = !zone.id;
   let showNotes = $state(!!zone.notes);
+
+  // valeurs en cours, lues par la carte si l'on quitte le mode aplats sans passer par « Enregistrer »
+  $effect(() => {
+    values = { kind, name: name.trim() || null, notes: notes.trim() || null };
+  });
 </script>
 
 <div class="sheet" class:compact={shapeEditing} role="dialog" aria-label="Zone">
@@ -25,7 +30,7 @@
     <div class="row">
       <button class="primary grow" onclick={() => onsave({ kind, name: name.trim() || null, notes: notes.trim() || null })}>Enregistrer</button>
       <button class="small" onclick={() => onshape()}>Fin de la forme</button>
-      <button class="ghost small" onclick={() => oncancel()}>Annuler</button>
+      <button class="ghost small" onclick={() => oncancel()}>Annuler la modification</button>
     </div>
   {:else}
     <div class="row">
