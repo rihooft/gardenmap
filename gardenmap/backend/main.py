@@ -64,10 +64,37 @@ def meta():
         **catalog(),
         "zone_kinds": geo.ZONE_KINDS,
         "garden": db.get_setting("garden"),
+        "custom_source": db.get_setting("custom_source"),
         "ai_enabled": opts.get("ai_provider", "none") != "none",
         "ha_api": bool(os.environ.get("SUPERVISOR_TOKEN")),
         "tracker_entity": db.get_setting("tracker_entity"),
     }
+
+
+@app.put("/api/settings/custom-source")
+def set_custom_source(payload: dict = Body(...)):
+    """Fond de carte supplémentaire (tuiles XYZ ou WMTS en EPSG:3857), choisi par l'utilisateur."""
+    url = str(payload.get("url") or "").strip()
+    if not url:
+        db.set_setting("custom_source", None)
+        return {"custom_source": None}
+    if not url.startswith("https://"):
+        raise HTTPException(400, "L'adresse doit commencer par https:// (sinon le navigateur la bloque).")
+    missing = [p for p in ("{z}", "{x}", "{y}") if p not in url]
+    if missing:
+        raise HTTPException(400, f"Il manque {', '.join(missing)} dans l'adresse des tuiles.")
+    try:
+        native = int(payload.get("native") or 19)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Zoom maximal invalide")
+    src = {
+        "label": (str(payload.get("label") or "").strip() or "Source personnalisée")[:40],
+        "url": url[:1000],
+        "native": max(10, min(23, native)),
+        "attribution": str(payload.get("attribution") or "").strip()[:200],
+    }
+    db.set_setting("custom_source", src)
+    return {"custom_source": src}
 
 
 @app.put("/api/settings/tracker")

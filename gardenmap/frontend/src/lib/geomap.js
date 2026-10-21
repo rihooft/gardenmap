@@ -28,6 +28,22 @@ export const BASES = {
   plan: { label: 'Plan IGN', url: `${WMTS}&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png`, native: 18, probe: [19] },
   none: { label: 'Aucun fond', url: null },
 };
+/** Fonds disponibles : ceux de l'IGN plus la source personnalisée éventuelle (Réglages). */
+export function basesFor(meta) {
+  const c = meta?.custom_source;
+  if (!c) return BASES;
+  const { none, ...ign } = BASES;
+  return { ...ign, custom: { label: c.label, url: c.url, native: c.native, attribution: c.attribution, custom: true }, none };
+}
+
+/**
+ * Au-delà de la résolution réelle du fond, la photo s'estompe au profit des aplats (nets à tous les zooms).
+ * Renvoie t entre 0 (photo nette) et 1 (largement sur-agrandie).
+ */
+export function overzoom(zoom, native) {
+  return Math.min(1, Math.max(0, (zoom - (native + 0.5)) / 1.5));
+}
+
 export const CADASTRE = {
   url: `${WMTS}&LAYER=CADASTRALPARCELS.PARCELLAIRE_EXPRESS&STYLE=PCI%20vecteur&FORMAT=image/png`,
   native: 19,
@@ -44,7 +60,7 @@ export const PRESETS = {
   mixte: { base: 'ortho', photoOpacity: 1, zones: true, zonesOpacity: 0.55 },
   plan: { base: 'ortho', photoOpacity: 0.3, zones: true, zonesOpacity: 0.95 },
 };
-const DEFAULT_PREFS = { ...PRESETS.mixte, cadastre: false, labels: true, preset: 'mixte' };
+const DEFAULT_PREFS = { ...PRESETS.mixte, cadastre: false, labels: true, autoFade: true, preset: 'mixte' };
 
 export function loadPrefs() {
   try {
@@ -126,7 +142,7 @@ export function tileLayer(def, native, opts = {}) {
   return L.tileLayer(def.url, {
     maxNativeZoom: native,
     maxZoom: MAX_ZOOM,
-    attribution: ATTRIB,
+    attribution: def.custom ? def.attribution || def.label : ATTRIB,
     crossOrigin: false,
     pmIgnore: true,
     ...opts,

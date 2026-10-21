@@ -3,6 +3,33 @@
   import { api } from '../lib/api.js';
   import { kindOf, fmtMeasure } from '../lib/geomap.js';
 
+  // --- source de tuiles personnalisée ---
+  const cs = app.meta.custom_source;
+  let src = $state({ label: cs?.label || '', url: cs?.url || '', native: cs?.native || 19, attribution: cs?.attribution || '' });
+  let testTiles = $state(null); // [{ z, url, ok }]
+
+  function tileAt(url, z) {
+    const g = app.meta.garden || { lat: 46.6, lon: 2.4 };
+    const n = 2 ** z;
+    const x = Math.floor(((g.lon + 180) / 360) * n);
+    const r = (g.lat * Math.PI) / 180;
+    const y = Math.floor(((1 - Math.asinh(Math.tan(r)) / Math.PI) / 2) * n);
+    return url.replace('{z}', z).replace('{x}', x).replace('{y}', y);
+  }
+
+  function testSource() {
+    const n = +src.native || 19;
+    testTiles = [n - 1, n, n + 1].map((z) => ({ z, url: tileAt(src.url.trim(), z), ok: null }));
+  }
+
+  async function saveSource(clear = false) {
+    const body = clear ? { url: '' } : $state.snapshot(src);
+    const r = await guard(() => api.put('settings/custom-source', body), clear ? 'Source supprimée' : 'Source enregistrée : choisissez-la dans 🗂️ sur la carte');
+    if (!r) return;
+    app.meta.custom_source = r.custom_source;
+    if (clear) { src = { label: '', url: '', native: 19, attribution: '' }; testTiles = null; }
+  }
+
   // --- appareil Home Assistant ---
   let trackers = $state(null);
   let trackerError = $state(null);
@@ -43,6 +70,43 @@
       <p class="muted small-text">Pas encore défini.</p>
     {/if}
     <button onclick={() => go('/', { situer: 1 })}>{app.meta.garden ? 'Changer la vue de départ' : 'Situer le jardin'}</button>
+  </section>
+
+  <section class="card">
+    <h2>Autre source de photos aériennes</h2>
+    <p class="muted small-text">
+      Ajoute un fond de carte en plus de l'IGN, à partir de l'adresse de ses tuiles (format XYZ ou WMTS en
+      projection Web Mercator, avec <code>{'{z}'}</code>, <code>{'{x}'}</code>, <code>{'{y}'}</code>).
+      Vérifiez que les conditions d'utilisation de la source vous y autorisent.
+    </p>
+    <div class="grid2">
+      <label class="field">Nom <input bind:value={src.label} placeholder="Ma source" /></label>
+      <label class="field">Zoom natif maximal <span class="hint">au-delà, l'image est agrandie</span>
+        <input type="number" min="10" max="23" bind:value={src.native} />
+      </label>
+    </div>
+    <label class="field">Adresse des tuiles
+      <input bind:value={src.url} placeholder={'https://exemple.fr/tuiles/{z}/{x}/{y}.jpg'} autocomplete="off" spellcheck="false" />
+    </label>
+    <label class="field">Attribution <span class="hint">mention de la source affichée sur la carte</span>
+      <input bind:value={src.attribution} placeholder="© Fournisseur" />
+    </label>
+    <div class="row">
+      <button class="small" disabled={!src.url.includes('{z}')} onclick={testSource}>Tester sur le jardin</button>
+      <button class="primary small" disabled={!src.url.trim()} onclick={() => saveSource()}>Enregistrer</button>
+      {#if app.meta.custom_source}<button class="small danger" onclick={() => saveSource(true)}>Supprimer</button>{/if}
+    </div>
+    {#if testTiles}
+      <div class="tiles">
+        {#each testTiles as t}
+          <figure>
+            <img src={t.url} alt="" onload={() => (t.ok = true)} onerror={() => (t.ok = false)} />
+            <figcaption>zoom {t.z} · {t.ok === null ? '…' : t.ok ? 'OK' : 'absente'}</figcaption>
+          </figure>
+        {/each}
+      </div>
+      <p class="muted small-text">Comparez les trois tuiles : si celle de droite existe et est plus nette, augmentez le zoom natif ; si celle du milieu est absente ou floue, diminuez-le.</p>
+    {/if}
   </section>
 
   <section class="card">
@@ -104,5 +168,9 @@
   td.num { text-align: right; white-space: nowrap; color: var(--ink-2); }
   .sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; margin-right: 8px; vertical-align: -2px; border: 1px solid rgb(0 0 0 / 0.15); }
   .sw.line { height: 4px; vertical-align: 3px; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tiles figure { margin: 0; }
+  .tiles img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; background: var(--surface-2); display: block; }
+  .tiles figcaption { font-size: 0.75rem; text-align: center; color: var(--ink-2); }
   code { font-size: 0.85em; background: var(--surface-2); padding: 1px 5px; border-radius: 5px; }
 </style>

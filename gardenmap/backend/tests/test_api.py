@@ -339,3 +339,13 @@ def test_geocode(client, monkeypatch):
     r = client.get("/api/geocode", params={"q": " 1 rue x bry "})
     assert r.status_code == 200 and r.json() == [{"label": "1 Rue X 94360 Bry-sur-Marne", "lat": 48.835, "lon": 2.52, "type": "housenumber"}]
     assert client.get("/api/geocode", params={"q": "ab"}).json() == []
+
+
+def test_custom_source(client):
+    assert client.put("/api/settings/custom-source", json={"url": "http://x/{z}/{x}/{y}.png"}).status_code == 400
+    r = client.put("/api/settings/custom-source", json={"url": "https://tiles.example/{z}/{x}.png"})
+    assert r.status_code == 400 and "{y}" in r.json()["detail"]
+    r = client.put("/api/settings/custom-source", json={"url": "https://tiles.example/{z}/{x}/{y}.jpg", "native": 30, "label": "Essai"})
+    assert r.json()["custom_source"] == {"label": "Essai", "url": "https://tiles.example/{z}/{x}/{y}.jpg", "native": 23, "attribution": ""}
+    assert client.get("/api/meta").json()["custom_source"]["label"] == "Essai"
+    assert client.put("/api/settings/custom-source", json={"url": ""}).json()["custom_source"] is None

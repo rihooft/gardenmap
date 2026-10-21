@@ -1,5 +1,6 @@
 <script>
-  import { BASES, PRESETS } from '../lib/geomap.js';
+  import { basesFor, PRESETS } from '../lib/geomap.js';
+  import { app, go } from '../lib/store.svelte.js';
 
   /** prefs : préférences d'affichage (objet réactif modifié en place) ; onchange() ; onclose() */
   let { prefs, onchange, onclose } = $props();
@@ -31,10 +32,13 @@
 
   <h3>Fond de carte</h3>
   <div class="chips">
-    {#each Object.entries(BASES) as [k, b]}
+    {#each Object.entries(basesFor(app.meta)) as [k, b]}
       <button class="chip" class:on={prefs.base === k} onclick={() => set('base', k)}>{b.label}</button>
     {/each}
   </div>
+  {#if !app.meta.custom_source}
+    <button class="link small-text" onclick={() => go('/reglages')}>＋ Ajouter une autre source de photos aériennes</button>
+  {/if}
   {#if prefs.base !== 'none'}
     <label class="field">Intensité du fond · {Math.round(prefs.photoOpacity * 100)} %
       <input type="range" min="0.1" max="1" step="0.05" value={prefs.photoOpacity} oninput={(e) => set('photoOpacity', +e.currentTarget.value)} />
@@ -45,7 +49,9 @@
   <div class="chips">
     <button class="chip" class:on={prefs.zones} onclick={() => set('zones', !prefs.zones)}>{prefs.zones ? 'Affichés' : 'Masqués'}</button>
     <button class="chip" class:on={prefs.labels} onclick={() => set('labels', !prefs.labels)}>Noms des zones</button>
+    <button class="chip" class:on={prefs.autoFade} onclick={() => set('autoFade', !prefs.autoFade)}>Fondu au zoom</button>
   </div>
+  <p class="muted small-text">Fondu au zoom : quand vous zoomez au-delà de la netteté de la photo, elle s'estompe et les aplats prennent le relais.</p>
   {#if prefs.zones}
     <label class="field">Opacité des aplats · {Math.round(prefs.zonesOpacity * 100)} %
       <input type="range" min="0.15" max="1" step="0.05" value={prefs.zonesOpacity} oninput={(e) => set('zonesOpacity', +e.currentTarget.value)} />
@@ -73,5 +79,6 @@
   .t-mixte { background: linear-gradient(135deg, rgb(168 207 111 / 0.8) 0 45%, rgb(95 182 230 / 0.8) 45% 60%, rgb(181 174 166 / 0.85) 60%), linear-gradient(135deg, #3d5e35, #8a8578); }
   .t-plan { background: linear-gradient(135deg, #a8cf6f 0 45%, #5fb6e6 45% 60%, #b5aea6 60%); }
   h3 { margin-top: 4px; }
+  .link { justify-self: start; border: 0; background: none; min-height: 28px; padding: 0; color: var(--leaf); }
   input[type='range'] { padding: 0; min-height: 32px; accent-color: var(--forest); }
 </style>

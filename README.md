@@ -33,6 +33,12 @@ aériennes, Plan IGN, limites cadastrales en option. Les tuiles sont chargées p
 Bouton **🗂️** : *Photo seule*, *Photo + aplats* ou *Plan simplifié* (photo atténuée en gris,
 aplats opaques), avec réglage fin des opacités. Ces préférences sont propres à chaque appareil.
 
+**Netteté.** La photo IGN a une résolution d'environ 20 cm par pixel (zoom natif 19) : au-delà,
+elle est seulement agrandie. Avec **Fondu au zoom** (activé par défaut), la photo s'estompe quand on
+zoome au-delà de sa netteté et les aplats, nets à tous les zooms, prennent le relais.
+**Réglages → Autre source de photos aériennes** permet d'ajouter un fond supplémentaire (tuiles XYZ/WMTS
+en Web Mercator), avec un test sur le jardin ; vérifiez les conditions d'utilisation de la source.
+
 Plus besoin d'importer ni de caler une image : les plantes et les zones sont enregistrées en
 coordonnées GPS (WGS84). L'export contient les aplats en `zones.geojson` (ouvrable dans QGIS).
 

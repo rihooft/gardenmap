@@ -3,7 +3,7 @@
   import { app, route, go, mapView, refreshSpecimens, refreshZones, guard, toast } from '../lib/store.svelte.js';
   import {
     L, BASES, CADASTRE, FRANCE, MAX_ZOOM, createGeoMap, tileLayer, probeNative, loadPrefs, savePrefs,
-    kindOf, zoneStyle, measureGeometry, parseLatLon,
+    kindOf, zoneStyle, measureGeometry, parseLatLon, basesFor, overzoom,
   } from '../lib/geomap.js';
   import { CATEGORY_ICON, STATUS_COLOR, ACTIVE_STATUSES, displayName, fmtMeters } from '../lib/format.js';
   import { api, photoUrl } from '../lib/api.js';
@@ -60,9 +60,11 @@
   function drawBase() {
     baseLayer?.remove();
     baseLayer = null;
-    const def = BASES[prefs.base];
+    const bases = basesFor(app.meta);
+    if (!bases[prefs.base]) prefs.base = 'ortho'; // source personnalisée supprimée entre-temps
+    const def = bases[prefs.base];
     if (def?.url) {
-      baseLayer = tileLayer(def, natives[prefs.base], { opacity: prefs.photoOpacity, className: `gm-base gm-base-${prefs.base}` });
+      baseLayer = tileLayer(def, nativeOf(prefs.base), { opacity: prefs.photoOpacity, className: `gm-base gm-base-${prefs.base}` });
       baseLayer.addTo(map);
     }
     cadastreLayer?.remove();
@@ -72,7 +74,31 @@
       cadastreLayer.addTo(map);
     }
     el.classList.toggle('no-base', !baseLayer);
-    el.classList.toggle('faded', prefs.photoOpacity <= 0.5);
+    applyFade();
+  }
+
+  function nativeOf(base) {
+    return base === 'custom' ? app.meta.custom_source?.native ?? 19 : natives[base];
+  }
+
+  // Fondu automatique : photo estompée et aplats renforcés quand on zoome au-delà de la résolution réelle.
+  let fadeT = $state(0);
+  function applyFade() {
+    if (!map) return;
+    const active = prefs.autoFade && baseLayer && prefs.zones && app.zones.length && !zonesMode;
+    fadeT = active ? overzoom(map.getZoom(), nativeOf(prefs.base)) : 0;
+    const photo = prefs.photoOpacity * (1 - 0.7 * fadeT);
+    baseLayer?.setOpacity(photo);
+    el.classList.toggle('faded', !!baseLayer && photo <= 0.5);
+    const op = zonesOpacity();
+    for (const { layer, kind } of zoneLayers.values()) {
+      if (!pending || pending.layer !== layer) layer.setStyle(zoneStyle(kind, op));
+    }
+  }
+
+  function zonesOpacity() {
+    if (zonesMode) return Math.max(prefs.zonesOpacity, 0.55);
+    return prefs.zonesOpacity + Math.max(0, 0.95 - prefs.zonesOpacity) * fadeT;
   }
 
   async function probeAll(lat, lon) {
@@ -84,6 +110,12 @@
     if (changed && map) drawBase();
   }
 
+  // la source personnalisée peut changer dans les Réglages
+  $effect(() => {
+    app.meta.custom_source;
+    if (ready) untrack(drawBase);
+  });
+
   // ------------------------------------------------------------------ aplats
   function drawZones() {
     if (!map) return;
@@ -91,7 +123,7 @@
     zoneLayers = new Map();
     zonesGroup = L.layerGroup();
     if (prefs.zones || zonesMode) {
-      const op = zonesMode ? Math.max(prefs.zonesOpacity, 0.55) : prefs.zonesOpacity;
+      const op = zonesOpacity();
       const items = app.zones
         .map((z) => ({ z, kind: kindOf(app.meta, z.kind) }))
         .sort((a, b) => (a.kind.geom === b.kind.geom ? (b.z.area_m2 ?? 0) - (a.z.area_m2 ?? 0) : a.kind.geom === 'polygon' ? -1 : 1));
@@ -102,11 +134,12 @@
           layer.bindTooltip(escapeHtml(z.name), { permanent: true, direction: 'center', className: 'gm-zlabel', interactive: false });
         }
         if (zonesMode) layer.on('click', (e) => { if (drawing || shapeEditing) return; L.DomEvent.stop(e); selectZone(z, layer); });
-        zoneLayers.set(z.id, layer);
+        zoneLayers.set(z.id, { layer, kind });
         gj.addTo(zonesGroup);
       }
     }
     zonesGroup.addTo(map);
+    applyFade();
   }
 
   // ------------------------------------------------------------------ plantes
@@ -140,7 +173,7 @@
   });
 
   $effect(() => {
-    app.zones; prefs.zones; prefs.zonesOpacity; prefs.labels; zonesMode;
+    app.zones; prefs.zones; prefs.zonesOpacity; prefs.labels; prefs.autoFade; zonesMode;
     if (ready) untrack(drawZones);
   });
 
@@ -154,6 +187,7 @@
     const z = map.getZoom();
     el.classList.toggle('labels', z >= LABEL_ZOOM);
     el.classList.toggle('zlabels', z >= ZONE_LABEL_ZOOM);
+    applyFade();
   }
 
   onMount(() => {
@@ -468,6 +502,10 @@
     {/if}
   {/if}
 
+  {#if fadeT > 0.3 && !sheet && !placing}
+    <div class="fadenote">Photo à sa limite de netteté : affichage des aplats</div>
+  {/if}
+
   {#if selected && !placing && !zonesMode}
     <button class="peek" onclick={() => go(`/plante/${selected.id}`)}>
       {#if selected.cover_photo_id}
@@ -582,6 +620,10 @@
   .hint {
     position: absolute; left: 12px; right: 12px; bottom: 16px; z-index: 900; max-width: 520px; margin: 0 auto;
     background: color-mix(in srgb, var(--surface) 92%, transparent); border-radius: 12px; padding: 10px 14px; font-size: 0.9rem; box-shadow: var(--shadow);
+  }
+  .fadenote {
+    position: absolute; left: 10px; bottom: 54px; z-index: 850; pointer-events: none; max-width: calc(100% - 200px);
+    background: color-mix(in srgb, var(--surface) 88%, transparent); border-radius: 8px; padding: 3px 8px; font-size: 0.75rem; color: var(--ink-2);
   }
   .peek {
     position: absolute; left: 12px; right: 12px; bottom: 96px; z-index: 950; max-width: 520px; margin: 0 auto;
