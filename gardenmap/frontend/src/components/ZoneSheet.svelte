@@ -24,7 +24,7 @@
 <div class="sheet" class:compact={shapeEditing} role="dialog" aria-label="Zone">
   {#if shapeEditing}
     <div class="row">
-      <span class="grow small-text">Glissez les sommets ; touchez le milieu d'un côté pour en ajouter un, un sommet pour le retirer.</span>
+      <span class="grow small-text">Glissez les sommets ; touchez le milieu d'un côté pour en ajouter un ; appui long sur un sommet pour le retirer.</span>
       {#if measure}<span class="pill">{fmtMeasure(measure)}</span>{/if}
     </div>
     <div class="row">

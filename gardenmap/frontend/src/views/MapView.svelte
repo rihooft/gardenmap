@@ -406,7 +406,7 @@
   }
 
   function shapeOptions() {
-    return { snappable: prefs.snap, snapDistance: 18, allowSelfIntersection: false, removeVertexOn: 'click' };
+    return { snappable: prefs.snap, snapDistance: 18, allowSelfIntersection: false, removeVertexOn: 'contextmenu' }; // appui long : un toucher bref ne supprime plus un sommet
   }
 
   function startDrawing(geom) {
